@@ -1,9 +1,18 @@
 class Plant {
-  String name;
-  DateTime expiration;
-  PlantKind kind;
+  String? name;
+  String? desc;
+  DateTime? expiration;
+  PlantKind? kind;
+  String? prizeDescription;
 
-  Plant(this.name, this.expiration, this.kind);
+  Map<Weekday, bool>? weekdaySelection;
+  
+  int? numTimes;
+  DurationType? duration;
+
+  TimingOption? timingOption; 
+
+  Plant();
   
 }
 
@@ -19,4 +28,37 @@ enum PlantKind {
     required this.prettyName,
     required this.numSketches
   });
+
+  static PlantKind plantFromPrettyName(String prettyName) {
+    for (PlantKind k in PlantKind.values) {
+      if (prettyName == k.prettyName) {
+        return k;
+      }
+    }
+    return PlantKind.values.first;
+  }
+}
+
+enum Weekday {
+  sunday,
+  monday,
+  tuesday,
+  wednesday,
+  thursday,
+  friday,
+  saturday
+}
+
+enum DurationType {
+  day (prettyName: "Day"),
+  week (prettyName: "Week"),
+  month (prettyName: "Month");
+
+  final String prettyName;
+  const DurationType({required this.prettyName});
+}
+
+enum TimingOption {
+  daysOfTheWeek,
+  numTimesPerDuration
 }
