@@ -221,9 +221,9 @@ class Plant {
 }
 
 enum PlantKind {
-  lettuce(prettyName: "Lettuce", numSketches: 3),
-  appleTree(prettyName: "Apple tree", numSketches: 3),
-  garlic(prettyName: "Garlic", numSketches: 3);
+  fern(prettyName: "Fern", numSketches: 3),
+  daisy(prettyName: "Daisy", numSketches: 3),
+  tree(prettyName: "Tree", numSketches: 3);
 
   final String prettyName;
   final int numSketches;
