@@ -8,6 +8,8 @@ import 'package:rootine/safedatetime.dart';
 import 'package:rootine/style.dart';
 import "package:change_case/change_case.dart";
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 double formSpacing = 10;
 
@@ -292,9 +294,7 @@ class _TimeSelectionState extends State<TimeSelectionRoute> {
                               ),
                               child: WeekdayToggleButtons(
                                 callback: () {
-                                  setTimingOption(
-                                    TimingOption.daysOfTheWeek,
-                                  );
+                                  setTimingOption(TimingOption.daysOfTheWeek);
                                 },
                               ),
                             ),
@@ -332,9 +332,10 @@ class _TimeSelectionState extends State<TimeSelectionRoute> {
                                 TimingOption.daysOfTheWeek;
                             break;
                           case TimingOption.numTimesPerDuration:
-                            currentPlant.numTimes = _numberPickerTimes;
+                            currentPlant.numCompletedPerDuration = _numberPickerTimes;
                             currentPlant.duration = _selectedDuration;
-                            currentPlant.timingOption = TimingOption.numTimesPerDuration;
+                            currentPlant.timingOption =
+                                TimingOption.numTimesPerDuration;
                             break;
                         }
 
@@ -545,8 +546,34 @@ class SetPrizeRoute extends StatefulWidget {
 class _SetPrizeRouteState extends State<SetPrizeRoute> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final prizeController = TextEditingController();
+  bool linkPressed = false;
+
   @override
   Widget build(BuildContext context) {
+    void whenSubmitted() {
+      if (_formKey.currentState!.validate()) {
+                        currentPlant.prizeDescription = prizeController.text;
+                        currentPlant.rewardType = RewardType.message; // too lazy to implement drawing or whatever in-app
+                        currentPlant.startDate = SafeDateTime.now();
+                        // populate default unwatered values
+                        switch (currentPlant.timingOption!) {
+                          case TimingOption.daysOfTheWeek:
+                            currentPlant.wateredToday = false;
+                            break;
+                          case TimingOption.numTimesPerDuration:
+                            currentPlant.numTimes = 0;
+                            break;
+                        }
+                        PlantProvider provider = Provider.of<PlantProvider>(
+                          context,
+                          listen: false,
+                        );
+                        provider.addPlant(currentPlant.name!, currentPlant);
+                        Navigator.of(
+                          context,
+                        ).popUntil((route) => route.isFirst);
+      }
+    }
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -571,32 +598,32 @@ class _SetPrizeRouteState extends State<SetPrizeRoute> {
                       hintText: "Enter a detailed description of your prize...",
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
+                      if ((value == null || value.isEmpty) && !linkPressed) {
                         return "Please provide a description!";
                       }
                       return null;
                     },
                   ),
+                  SizedBox(height: 10),
+                  TextButton(
+                    onPressed: () {
+                      linkPressed = true;
+                      currentPlant.shareLink();
+                      whenSubmitted();
+                    },
+                    child: Text(
+                      "Or ask a friend",
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
                   SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: () {
                       // Validate and save the form
-                      if (_formKey.currentState!.validate()) {
-                        currentPlant.prizeDescription = prizeController.text;
-                        currentPlant.startDate = SafeDateTime.now();
-                        // populate default unwatered values
-                        switch(currentPlant.timingOption!) {
-                          case TimingOption.daysOfTheWeek:
-                            currentPlant.wateredToday = false;
-                            break;
-                          case TimingOption.numTimesPerDuration:
-                            currentPlant.numCompletedPerDuration=  0;
-                          break;
-                        }
-                        PlantProvider provider = Provider.of<PlantProvider>(context, listen:false);
-                        provider.addPlant(currentPlant.name!, currentPlant);
-                        Navigator.of(context).popUntil((route) => route.isFirst);
-                      } 
+                      whenSubmitted();
                     },
                     child: Row(
                       mainAxisSize: MainAxisSize.min,

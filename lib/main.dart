@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:rainbow_color/rainbow_color.dart';
@@ -58,10 +60,10 @@ class PlantProvider extends ChangeNotifier {
           MapEntry(key, Plant.fromMap(Map<String, dynamic>.from(value))),
     );
 
-    if (lastUpdated != null && (
-        lastUpdated.day != SafeDateTime.now().day ||
-        lastUpdated.month != SafeDateTime.now().month ||
-        lastUpdated.year != SafeDateTime.now().year)) {
+    if (lastUpdated != null &&
+        (lastUpdated.day != SafeDateTime.now().day ||
+            lastUpdated.month != SafeDateTime.now().month ||
+            lastUpdated.year != SafeDateTime.now().year)) {
       for (var plant in extracted.values) {
         if (plant.timingOption == TimingOption.daysOfTheWeek) {
           if (lastUpdated != null) {
@@ -85,7 +87,7 @@ class PlantProvider extends ChangeNotifier {
                 currentDay = currentDay.add(const Duration(days: 1));
               }
 
-              plant.health -= (1/((daysMissed/3)+1));
+              plant.health -= (1 / ((daysMissed / 3) + 1));
               print(
                 'Plant ${plant.name} missed watering for $daysMissed days.',
               );
@@ -95,9 +97,12 @@ class PlantProvider extends ChangeNotifier {
           if (lastUpdated != null) {
             final duration = plant.duration;
             if (duration != null) {
-              DateTime currentDurationStart = plant.startDate ?? SafeDateTime.now();
+              DateTime currentDurationStart =
+                  plant.startDate ?? SafeDateTime.now();
               while (currentDurationStart.isBefore(lastUpdated)) {
-                currentDurationStart = currentDurationStart.add(duration.toDuration());
+                currentDurationStart = currentDurationStart.add(
+                  duration.toDuration(),
+                );
               }
 
               int missedIntervals = 0;
@@ -108,8 +113,10 @@ class PlantProvider extends ChangeNotifier {
               }
 
               double pointsLost = missedIntervals.toDouble();
-              if (plant.numTimes != 0 && plant.numCompletedPerDuration != null) {
-                pointsLost += (plant.numCompletedPerDuration! - plant.numTimes!) /
+              if (plant.numTimes != 0 &&
+                  plant.numCompletedPerDuration != null) {
+                pointsLost +=
+                    (plant.numCompletedPerDuration! - plant.numTimes!) /
                     plant.numCompletedPerDuration!;
                 plant.numTimes = 0;
               }
@@ -117,7 +124,7 @@ class PlantProvider extends ChangeNotifier {
               print(
                 'Plant ${plant.name} lost $pointsLost points due to missed intervals.',
               );
-              plant.health -= (1/((pointsLost/3)+1));
+              plant.health -= (1 / ((pointsLost / 3) + 1));
             }
           }
         }
@@ -157,7 +164,8 @@ class PlantProvider extends ChangeNotifier {
           'startDate': value.startDate?.toIso8601String(),
           'wateredToday': value.wateredToday,
           'numCompletedPerDuration': value.numCompletedPerDuration,
-          'health': value.health
+          'health': value.health,
+          'rewardType': value.rewardType.toString(),
         }),
       ),
     );
@@ -234,50 +242,218 @@ class _MyHomePageState extends State<MyHomePage> {
                 return SingleChildScrollView(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: Provider.of<PlantProvider>(context).plants.entries
-                        .map((entry) {
-                            return Card(
-                              elevation: 4.0,
-                              margin: const EdgeInsets.symmetric(
-                              vertical: 8.0,
-                              horizontal: 16.0,
-                              ),
-                              shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12.0),
-                              ),
-                              child: ListTile(
-                              onTap: () {
-                                // Add your onTap functionality here
-                              },
-                              leading: CircularPercentIndicator(
-                                radius: 20.0,
-                                lineWidth: 5.0,
-                                percent: entry.value.getProgress(),
-                                center: Text(
-                                '${(entry.value.getProgress() * 100).toStringAsFixed(0)}%',
-                                style: const TextStyle(fontSize: 10),
+                    children: Provider.of<PlantProvider>(context).plants.entries.map((
+                      entry,
+                    ) {
+                      Widget leadingNode = CircularPercentIndicator(
+                        radius: 20.0,
+                        lineWidth: 5.0,
+                        percent: entry.value.getProgress(),
+                        center: Text(
+                          '${(entry.value.getProgress() * 100).toStringAsFixed(0)}%',
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                        progressColor: fromHealth(entry.value.health),
+                      );
+                      String wateredMsg = "";
+                      bool needsWater = entry.value.needsWater();
+                      if ((entry.value.timingOption ==
+                                  TimingOption.daysOfTheWeek ||
+                              entry.value.numCompletedPerDuration == 1) &&
+                          needsWater) {
+                        wateredMsg = "Needs to be watered today";
+                      } else {
+                        if (needsWater) {
+                          wateredMsg =
+                              "Water status: ${entry.value.numTimes}/${entry.value.numCompletedPerDuration} ";
+                          switch (entry.value.duration) {
+                            case DurationType.day:
+                              wateredMsg += " today";
+                              break;
+                            case DurationType.week:
+                              wateredMsg += " this week";
+                              break;
+                            case DurationType.month:
+                              wateredMsg += " this month";
+                              break;
+                            default:
+                              break;
+                          }
+                        }
+                      }
+                      if (!needsWater) {
+                        wateredMsg = "Fully watered today!";
+                      }
+                      Widget trailingNote = Text(
+                        'Harvests ${entry.value.expiration!.month}/${entry.value.expiration!.day}/${entry.value.expiration!.year}',
+                      );
+                      Widget timingIndicator;
+                      if (entry.value.timingOption ==
+                          TimingOption.daysOfTheWeek) {
+                        timingIndicator = Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: Weekday.values.map((weekday) {
+                            bool isSelected =
+                                entry.value.weekdaySelection?[weekday] ?? false;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                              child: CircleAvatar(
+                                radius: 12,
+                                backgroundColor: isSelected
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.grey[300],
+                                child: Text(
+                                  weekday.name.substring(0, 1).toUpperCase(),
+                                  style: TextStyle(
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.black,
+                                  ),
                                 ),
-                                progressColor: fromHealth(entry.value.health),
-                              ),
-                              title: Text(entry.key),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                Text(entry.value.desc!),
-                                Text(
-                                  'Health: ${(entry.value.health * 100).toStringAsFixed(0)}%',
-                                  style: TextStyle(color: fromHealth(entry.value.health)),
-                                ),
-                                ],
-                              ),
-                              trailing: Text(
-                                'Harvests ${entry.value.expiration!.day}/${entry.value.expiration!.month}/${entry.value.expiration!.year}',
-                                style: const TextStyle(color: Colors.grey),
-                              ),
                               ),
                             );
-                        })
-                        .toList(),
+                          }).toList(),
+                        );
+                      } else {
+                        timingIndicator = Text(
+                          "Needs water ${entry.value.numCompletedPerDuration} times per ${entry.value.duration?.prettyName ?? 'duration'}",
+                        );
+                      }
+                      bool needsPrize = false;
+                      if (entry.value.prizeDescription == null ||
+                          entry.value.prizeDescription!.isEmpty) {
+                        needsPrize = true;
+                        trailingNote = Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            trailingNote,
+                            TextButton.icon(
+                              onPressed: () {
+                                // Add your "add prize" functionality here
+                                entry.value.shareLink();
+                              },
+                              icon: const Icon(Icons.card_giftcard, size: 16),
+                              label: const Text('Send a link to hide prize'),
+                            ),
+                          ],
+                        );
+                        leadingNode = const Icon(Icons.upload_file);
+                      }
+                      return Card(
+                        elevation: 4.0,
+                        margin: const EdgeInsets.symmetric(
+                          vertical: 8.0,
+                          horizontal: 16.0,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.0),
+                        ),
+                        child: ListTile(
+                          onTap: () {
+                            // Add your onTap functionality here
+                            if (needsPrize) {
+                              FilePicker.platform
+                                  .pickFiles(
+                                    type: FileType.custom,
+                                    allowedExtensions: ['rootine'],
+                                  )
+                                  .then((result) {
+                                    if (result != null &&
+                                        result.files.isNotEmpty) {
+                                      final file = result.files.first;
+                                      final filePath = file.path;
+                                      if (filePath != null) {
+                                        // Process the .rootine file
+                                        print('Selected file: $filePath');
+
+                                        entry.value.extractRootineFile(
+                                          File(file.path!),
+                                        );
+                                        entry.value
+                                            .extractRootineFile(
+                                              File(file.path!),
+                                            )
+                                            .then((_) {
+                                              setState(() {
+                                                Provider.of<PlantProvider>(
+                                                  context,
+                                                  listen: false,
+                                                ).updateStorage().then((_) {
+                                                  Provider.of<PlantProvider>(
+                                                    context,
+                                                    listen: false,
+                                                  ).refreshPlants();
+                                                });
+                                              });
+                                            })
+                                            .catchError((error) {
+                                              print(
+                                                'Error processing file: $error',
+                                              );
+                                            });
+                                      }
+                                    } else {
+                                      print('No file selected.');
+                                    }
+                                  })
+                                  .catchError((error) {
+                                    print('Error picking file: $error');
+                                  });
+                            } else {
+                              // TODO: watering
+                              bool success = entry.value.waterPlant();
+                              if (success) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      '${entry.value.name} watered!',
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      '${entry.value.name} has already been fully watered today!',
+                                    ),
+                                  ),
+                                );
+                              }
+                              Provider.of<PlantProvider>(
+                                context,
+                                listen: false,
+                              ).updateStorage();
+                              setState(() {
+                                Provider.of<PlantProvider>(
+                                  context,
+                                  listen: false,
+                                ).refreshPlants();
+                              });
+                            }
+                          },
+                          leading: leadingNode,
+                          title: Text(entry.key),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(entry.value.desc!),
+                              Text(
+                                'Health: ${(entry.value.health * 100).toStringAsFixed(0)}%',
+                                style: TextStyle(
+                                  color: fromHealth(entry.value.health),
+                                ),
+                              ),
+                              Text(wateredMsg),
+                              timingIndicator
+                            ],
+                          ),
+                          trailing: trailingNote,
+                        ),
+                      );
+                    }).toList(),
                   ),
                 );
               }
@@ -304,7 +480,11 @@ class _MyHomePageState extends State<MyHomePage> {
 
 Color fromHealth(double health) {
   var rb = Rainbow(
-    spectrum: [Color(0xffff0000), Color.fromARGB(255, 225, 221, 0), Color.fromARGB(255, 0, 158, 0)],
+    spectrum: [
+      Color.fromARGB(255, 178, 0, 0),
+      Color.fromARGB(255, 225, 221, 0),
+      Color.fromARGB(255, 0, 158, 0),
+    ],
     rangeStart: 0.0,
     rangeEnd: 1.0,
   );
