@@ -92,6 +92,11 @@ class PlantProvider extends ChangeNotifier {
                 'Plant ${plant.name} missed watering for $daysMissed days.',
               );
             }
+            if (plant.weekdaySelection != null &&
+              plant.weekdaySelection![Weekday.values[SafeDateTime.now().weekday - 1]] ==
+                true) {
+              plant.wateredToday = false;
+            }
           }
         } else if (plant.timingOption == TimingOption.numTimesPerDuration) {
           if (lastUpdated != null) {
@@ -126,6 +131,7 @@ class PlantProvider extends ChangeNotifier {
               );
               plant.health -= (1 / ((pointsLost / 3) + 1));
             }
+            plant.numTimes = 0;
           }
         }
       }
@@ -479,7 +485,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           ),
                           ),
                       );
-                    }).toList(),
+                    }).toList()
                   ),
                 );
               }

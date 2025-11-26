@@ -4,7 +4,7 @@ class SafeDateTime {
     if (DEBUG) {
       return DateTime.now();
     } else {
-      return DateTime.now().add(Duration(days:20));
+      return DateTime.now().add(Duration(days:11));
     }
   }
 }
