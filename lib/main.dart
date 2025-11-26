@@ -245,15 +245,20 @@ class _MyHomePageState extends State<MyHomePage> {
                     children: Provider.of<PlantProvider>(context).plants.entries.map((
                       entry,
                     ) {
-                      Widget leadingNode = CircularPercentIndicator(
-                        radius: 20.0,
-                        lineWidth: 5.0,
-                        percent: entry.value.getProgress(),
-                        center: Text(
-                          '${(entry.value.getProgress() * 100).toStringAsFixed(0)}%',
-                          style: const TextStyle(fontSize: 10),
+                      Widget leadingNode = SizedBox(
+                        child: CircularPercentIndicator(
+                          radius: 40.0,
+                          lineWidth: 5.0,
+                          percent: entry.value.getProgress(),
+                          center: Image.asset(
+                            entry.value.getPlantImagePath(),
+                            width: 40.0,
+                            height: 40.0,
+                          ),
+                          progressColor: fromHealth(entry.value.health),
                         ),
-                        progressColor: fromHealth(entry.value.health),
+                        width: 80.0,
+                        height: 80.0
                       );
                       String wateredMsg = "";
                       bool needsWater = entry.value.needsWater();
@@ -319,7 +324,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         );
                       } else {
                         timingIndicator = Text(
-                          "Needs water ${entry.value.numCompletedPerDuration} times per ${entry.value.duration?.prettyName ?? 'duration'}",
+                          "Needs water ${entry.value.numCompletedPerDuration} times per ${entry.value.duration?.prettyName.toLowerCase() ?? 'duration'}",
                         );
                       }
                       bool needsPrize = false;
@@ -340,118 +345,139 @@ class _MyHomePageState extends State<MyHomePage> {
                             ),
                           ],
                         );
-                        leadingNode = const Icon(Icons.upload_file);
+                        leadingNode = const Icon(Icons.upload_file, size: 60);
                       }
-                      return Card(
-                        elevation: 4.0,
-                        margin: const EdgeInsets.symmetric(
+                      return  Card(
+                          elevation: 4.0,
+                          margin: const EdgeInsets.symmetric(
                           vertical: 8.0,
                           horizontal: 16.0,
-                        ),
-                        shape: RoundedRectangleBorder(
+                          ),
+                          shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12.0),
-                        ),
-                        child: ListTile(
+                          ),
+                          child: InkWell(
                           onTap: () {
                             // Add your onTap functionality here
                             if (needsPrize) {
-                              FilePicker.platform
-                                  .pickFiles(
-                                    type: FileType.custom,
-                                    allowedExtensions: ['rootine'],
-                                  )
-                                  .then((result) {
-                                    if (result != null &&
-                                        result.files.isNotEmpty) {
-                                      final file = result.files.first;
-                                      final filePath = file.path;
-                                      if (filePath != null) {
-                                        // Process the .rootine file
-                                        print('Selected file: $filePath');
+                            FilePicker.platform
+                              .pickFiles(
+                                type: FileType.custom,
+                                allowedExtensions: ['rootine'],
+                              )
+                              .then((result) {
+                                if (result != null &&
+                                  result.files.isNotEmpty) {
+                                final file = result.files.first;
+                                final filePath = file.path;
+                                if (filePath != null) {
+                                  // Process the .rootine file
+                                  print('Selected file: $filePath');
 
-                                        entry.value.extractRootineFile(
-                                          File(file.path!),
-                                        );
-                                        entry.value
-                                            .extractRootineFile(
-                                              File(file.path!),
-                                            )
-                                            .then((_) {
-                                              setState(() {
-                                                Provider.of<PlantProvider>(
-                                                  context,
-                                                  listen: false,
-                                                ).updateStorage().then((_) {
-                                                  Provider.of<PlantProvider>(
-                                                    context,
-                                                    listen: false,
-                                                  ).refreshPlants();
-                                                });
-                                              });
-                                            })
-                                            .catchError((error) {
-                                              print(
-                                                'Error processing file: $error',
-                                              );
-                                            });
-                                      }
-                                    } else {
-                                      print('No file selected.');
-                                    }
-                                  })
-                                  .catchError((error) {
-                                    print('Error picking file: $error');
-                                  });
-                            } else {
-                              // TODO: watering
-                              bool success = entry.value.waterPlant();
-                              if (success) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '${entry.value.name} watered!',
-                                    ),
-                                  ),
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '${entry.value.name} has already been fully watered today!',
-                                    ),
-                                  ),
-                                );
-                              }
-                              Provider.of<PlantProvider>(
-                                context,
-                                listen: false,
-                              ).updateStorage();
-                              setState(() {
-                                Provider.of<PlantProvider>(
-                                  context,
-                                  listen: false,
-                                ).refreshPlants();
+                                  entry.value.extractRootineFile(
+                                  File(file.path!),
+                                  );
+                                  entry.value
+                                    .extractRootineFile(
+                                    File(file.path!),
+                                    )
+                                    .then((_) {
+                                    setState(() {
+                                      Provider.of<PlantProvider>(
+                                      context,
+                                      listen: false,
+                                      ).updateStorage().then((_) {
+                                      Provider.of<PlantProvider>(
+                                        context,
+                                        listen: false,
+                                      ).refreshPlants();
+                                      });
+                                    });
+                                    })
+                                    .catchError((error) {
+                                    print(
+                                      'Error processing file: $error',
+                                    );
+                                    });
+                                }
+                                } else {
+                                print('No file selected.');
+                                }
+                              })
+                              .catchError((error) {
+                                print('Error picking file: $error');
                               });
-                            }
-                          },
-                          leading: leadingNode,
-                          title: Text(entry.key),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(entry.value.desc!),
-                              Text(
-                                'Health: ${(entry.value.health * 100).toStringAsFixed(0)}%',
-                                style: TextStyle(
-                                  color: fromHealth(entry.value.health),
+                            } else {
+                            // TODO: watering
+                            bool success = entry.value.waterPlant();
+                            if (success) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                '${entry.value.name} watered!',
                                 ),
                               ),
-                              Text(wateredMsg),
-                              timingIndicator
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                '${entry.value.name} has already been fully watered today!',
+                                ),
+                              ),
+                              );
+                            }
+                            Provider.of<PlantProvider>(
+                              context,
+                              listen: false,
+                            ).updateStorage();
+                            setState(() {
+                              Provider.of<PlantProvider>(
+                              context,
+                              listen: false,
+                              ).refreshPlants();
+                            });
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Row(
+                            children: [
+                              leadingNode,
+                              const SizedBox(width: 16.0),
+                              Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                                children: [
+                                Text(
+                                  entry.value.name!,
+                                  style: const TextStyle(
+                                  fontSize: 18.0,
+                                  fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4.0),
+                                Text(entry.value.desc!),
+                                const SizedBox(height: 4.0),
+                                Text(
+                                  'Health: ${(entry.value.health * 100).toStringAsFixed(0)}%',
+                                  style: TextStyle(
+                                  color: fromHealth(entry.value.health),
+                                  ),
+                                ),
+                                const SizedBox(height: 4.0),
+                                Text(wateredMsg),
+                                const SizedBox(height: 4.0),
+                                timingIndicator,
+                                ],
+                              ),
+                              ),
+                              trailingNote,
                             ],
+                            ),
                           ),
-                          trailing: trailingNote,
-                        ),
+                          ),
                       );
                     }).toList(),
                   ),

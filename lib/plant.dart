@@ -145,6 +145,24 @@ class Plant {
     return success;
   }
 
+  String getPlantImagePath() {
+    if (kind == null) {
+      throw Exception("Plant kind is not defined");
+    }
+
+    final progress = getProgress();
+    final numSketches = kind!.numSketches;
+
+    int sketchIndex;
+    if (progress >= 1.0) {
+      sketchIndex = numSketches; // Return the highest value when progress is 1 or greater
+    } else {
+      sketchIndex = (progress * (numSketches-1)).ceil().clamp(1, (numSketches-1));
+    }
+
+    return 'lib/plants/${kind!.name.toLowerCase()}/$sketchIndex.png';
+  }
+
   void undoWaterPlant() {
     if (timingOption == TimingOption.daysOfTheWeek) {
       print("setting wateredToday to false");
