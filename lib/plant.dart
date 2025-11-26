@@ -17,7 +17,6 @@ class Plant {
   PlantKind? kind;
   String? prizeDescription;
   RewardType? rewardType;
-  
 
   Map<Weekday, bool>? weekdaySelection;
   bool? wateredToday;
@@ -39,48 +38,54 @@ class Plant {
       ..name = plantData['name'] as String?
       ..desc = plantData['desc'] as String?
       ..expiration = plantData['expiration'] != null
-        ? DateTime.parse(plantData['expiration'] as String)
-        : null
+          ? DateTime.parse(plantData['expiration'] as String)
+          : null
       ..kind = plantData['kind'] != null
-        ? PlantKind.plantFromPrettyName(plantData['kind'] as String)
-        : null
+          ? PlantKind.plantFromPrettyName(plantData['kind'] as String)
+          : null
       ..prizeDescription = plantData['prizeDescription'] as String?
       ..weekdaySelection = plantData['weekdaySelection'] != null
-        ? (plantData['weekdaySelection'] as Map<String, dynamic>).map(
-          (key, value) => MapEntry(
-          Weekday.values.firstWhere((e) => e.name == key),
-          value as bool,
-          ),
-        )
-        : null
+          ? (plantData['weekdaySelection'] as Map<String, dynamic>).map(
+              (key, value) => MapEntry(
+                Weekday.values.firstWhere((e) => e.name == key),
+                value as bool,
+              ),
+            )
+          : null
       ..numTimes = plantData['numTimes'] as int?
       ..duration = plantData['duration'] != null
-        ? DurationType.values.firstWhere(
-          (e) => e.prettyName == plantData['duration'],
-          orElse: () => DurationType.day,
-        )
-        : null
+          ? DurationType.values.firstWhere(
+              (e) => e.prettyName == plantData['duration'],
+              orElse: () => DurationType.day,
+            )
+          : null
       ..timingOption = plantData['timingOption'] != null
-        ? TimingOption.values.firstWhere(
-          (e) => e.name == plantData['timingOption'],
-          orElse: () => TimingOption.daysOfTheWeek,
-        )
-        : null
+          ? TimingOption.values.firstWhere(
+              (e) => e.name == plantData['timingOption'],
+              orElse: () => TimingOption.daysOfTheWeek,
+            )
+          : null
       ..startDate = plantData['startDate'] != null
-        ? DateTime.parse(plantData['startDate'] as String)
-        : null
+          ? DateTime.parse(plantData['startDate'] as String)
+          : null
       ..wateredToday = plantData['wateredToday'] as bool?
       ..numCompletedPerDuration = plantData['numCompletedPerDuration'] as int?
       ..health = plantData['health'] != null
-        ? (plantData['health'] as num).toDouble()
-        : 1
+          ? (plantData['health'] as num).toDouble()
+          : 1
       ..rewardType = plantData['rewardType'] != null
-        ? RewardType.values.firstWhere(
-          (e) => e.name == plantData['rewardType'],
-          orElse: () => RewardType.message,
-        )
-        : RewardType.message;
-    }
+          ? RewardType.values.firstWhere(
+              (e) => e.name == plantData['rewardType'],
+              orElse: () => RewardType.gift,
+            )
+          : null;
+  }
+
+  bool ready() {
+    bool toReturn = !needsWater() && getProgress() >= 1.0;
+    print("Plant $name ready: $toReturn (${getProgress()})");
+    return toReturn;
+  }
 
   double getProgress() {
     if (startDate == null || expiration == null) {
@@ -88,9 +93,11 @@ class Plant {
     }
 
     final now = SafeDateTime.now();
+    /*
     if (now.isBefore(startDate!) || now.isAfter(expiration!)) {
       return 0.0;
     }
+    */
 
     final totalDuration = expiration!.difference(startDate!).inMilliseconds;
     final elapsedDuration = now.difference(startDate!).inMilliseconds;
@@ -100,7 +107,7 @@ class Plant {
 
   void shareLink() {
     final url =
-        'https://laithali004.github.io/rooting-reward/?habit=${Uri.encodeComponent(this.desc ?? '')}&time=${Uri.encodeComponent(DateFormat('MM-dd-yy').format(this.expiration!))}';
+        'https://laithali004.github.io/rooting-reward/?habit=${Uri.encodeComponent(desc ?? '')}&time=${Uri.encodeComponent(DateFormat('MM-dd-yy').format(expiration!))}';
 
     if (Platform.isLinux) {
       final Uri uri = Uri.parse(url);
@@ -108,7 +115,7 @@ class Plant {
     } else {
       SharePlus.instance.share(
         ShareParams(
-          text: "Your friend wants your help to stay in rootine! ${url}",
+          text: "Your friend wants your help to stay in rootine! $url",
         ),
       );
     }
@@ -135,7 +142,8 @@ class Plant {
     if (timingOption == TimingOption.daysOfTheWeek && needsWater()) {
       wateredToday = true;
       success = true;
-    } else if (timingOption == TimingOption.numTimesPerDuration && needsWater()) {
+    } else if (timingOption == TimingOption.numTimesPerDuration &&
+        needsWater()) {
       numTimes = (numTimes ?? 0) + 1;
       success = true;
     }
@@ -155,9 +163,13 @@ class Plant {
 
     int sketchIndex;
     if (progress >= 1.0) {
-      sketchIndex = numSketches; // Return the highest value when progress is 1 or greater
+      sketchIndex =
+          numSketches; // Return the highest value when progress is 1 or greater
     } else {
-      sketchIndex = (progress * (numSketches-1)).ceil().clamp(1, (numSketches-1));
+      sketchIndex = (progress * (numSketches - 1)).ceil().clamp(
+        1,
+        (numSketches - 1),
+      );
     }
 
     return 'lib/plants/${kind!.name.toLowerCase()}/$sketchIndex.png';
@@ -174,7 +186,7 @@ class Plant {
     }
     health = (health - 0.1).clamp(0.0, 1.0);
   }
-  
+
   Future<void> extractRootineFile(File file) async {
     if (!file.path.endsWith('.rootine')) {
       throw ArgumentError('File must have a .rootine extension');
@@ -195,46 +207,46 @@ class Plant {
       final metaJsonBytes = fileData['meta.json']!;
       final metaJsonString = String.fromCharCodes(metaJsonBytes);
       final Map<String, dynamic> metaData = Map<String, dynamic>.from(
-      jsonDecode(metaJsonString) as Map,
+        jsonDecode(metaJsonString) as Map,
       );
 
       // Now `metaData` contains the parsed JSON data from "meta.json"
       if (metaData.containsKey('rewardType')) {
         final rewardTypeString = metaData['rewardType'] as String;
-        this.rewardType = RewardType.values.firstWhere(
+        rewardType = RewardType.values.firstWhere(
           (e) => e.name == rewardTypeString,
           orElse: () => RewardType.message,
         );
       }
+      print("parser found reward type $rewardType");
       switch (rewardType) {
         case RewardType.drawing:
           if (fileData.containsKey('drawing.png')) {
-        final drawingBytes = fileData['drawing.png']!;
-        this.prizeDescription = base64Encode(drawingBytes);
+            final drawingBytes = fileData['drawing.png']!;
+            prizeDescription = base64Encode(drawingBytes);
           }
           break;
         case RewardType.gift:
           if (fileData.containsKey('gift_code.txt')) {
-        final giftCodeBytes = fileData['gift_code.txt']!;
-        this.prizeDescription = String.fromCharCodes(giftCodeBytes);
+            final giftCodeBytes = fileData['gift_code.txt']!;
+            prizeDescription = String.fromCharCodes(giftCodeBytes);
           }
           break;
         case RewardType.message:
           if (fileData.containsKey('message.txt')) {
-        final messageBytes = fileData['message.txt']!;
-        this.prizeDescription = String.fromCharCodes(messageBytes);
+            final messageBytes = fileData['message.txt']!;
+            prizeDescription = String.fromCharCodes(messageBytes);
           }
           break;
         default:
           print("wtf");
       }
-
     } else {
       throw Exception('meta.json not found in the archive');
     }
     print("Successfully imported file");
+    print(rewardType);
     print(prizeDescription);
-    
   }
 }
 
@@ -258,11 +270,7 @@ enum PlantKind {
   }
 }
 
-enum RewardType {
-  gift,
-  message,
-  drawing
-}
+enum RewardType { gift, message, drawing }
 
 enum Weekday { sunday, monday, tuesday, wednesday, thursday, friday, saturday }
 

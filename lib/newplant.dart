@@ -78,41 +78,29 @@ class NewPlantFormState extends State<NewPlantForm> {
                 return null;
               },
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20.0),
-              child: Row(
-                children: [
-                  Text('Give your plant a name:'),
-                  SizedBox.square(dimension: formSpacing),
-                  Flexible(
-                    child: TextFormField(
-                      controller: nameController,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Name your plant!';
-                        }
-                        if (value.length > 20) {
-                          return 'Plant name must be < 20 characters!';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                ],
+
+            SizedBox.square(dimension: 20),
+            Text('Give your plant a name:'),
+            Flexible(
+              child: TextFormField(
+                controller: nameController,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Name your plant!';
+                  }
+                  if (value.length > 20) {
+                    return 'Plant name must be < 20 characters!';
+                  }
+                  return null;
+                },
               ),
             ),
 
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text("Your plant will harvest on"),
-                  SizedBox.square(dimension: 20),
-                  HarvestDatePicker(),
-                ],
-              ),
-            ),
+            SizedBox.square(dimension: 20),
+            Text("Your plant will harvest on"),
+            SizedBox.square(dimension: 10),
+            HarvestDatePicker(),
+            SizedBox.square(dimension: 20),
 
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10.0),
@@ -313,9 +301,7 @@ class _TimeSelectionState extends State<TimeSelectionRoute> {
                                 TimingOption.numTimesPerDuration),
                         child: TimesPerDurationSelector(
                           callback: () {
-                            this.setTimingOption(
-                              TimingOption.numTimesPerDuration,
-                            );
+                            setTimingOption(TimingOption.numTimesPerDuration);
                           },
                         ),
                       ),
@@ -332,7 +318,8 @@ class _TimeSelectionState extends State<TimeSelectionRoute> {
                                 TimingOption.daysOfTheWeek;
                             break;
                           case TimingOption.numTimesPerDuration:
-                            currentPlant.numCompletedPerDuration = _numberPickerTimes;
+                            currentPlant.numCompletedPerDuration =
+                                _numberPickerTimes;
                             currentPlant.duration = _selectedDuration;
                             currentPlant.timingOption =
                                 TimingOption.numTimesPerDuration;
@@ -552,28 +539,28 @@ class _SetPrizeRouteState extends State<SetPrizeRoute> {
   Widget build(BuildContext context) {
     void whenSubmitted() {
       if (_formKey.currentState!.validate()) {
-                        currentPlant.prizeDescription = prizeController.text;
-                        currentPlant.rewardType = RewardType.message; // too lazy to implement drawing or whatever in-app
-                        currentPlant.startDate = SafeDateTime.now();
-                        // populate default unwatered values
-                        switch (currentPlant.timingOption!) {
-                          case TimingOption.daysOfTheWeek:
-                            currentPlant.wateredToday = false;
-                            break;
-                          case TimingOption.numTimesPerDuration:
-                            currentPlant.numTimes = 0;
-                            break;
-                        }
-                        PlantProvider provider = Provider.of<PlantProvider>(
-                          context,
-                          listen: false,
-                        );
-                        provider.addPlant(currentPlant.name!, currentPlant);
-                        Navigator.of(
-                          context,
-                        ).popUntil((route) => route.isFirst);
+        currentPlant.prizeDescription = prizeController.text;
+        currentPlant.rewardType = RewardType
+            .message; // too lazy to implement drawing or whatever in-app
+        currentPlant.startDate = SafeDateTime.now();
+        // populate default unwatered values
+        switch (currentPlant.timingOption!) {
+          case TimingOption.daysOfTheWeek:
+            currentPlant.wateredToday = false;
+            break;
+          case TimingOption.numTimesPerDuration:
+            currentPlant.numTimes = 0;
+            break;
+        }
+        PlantProvider provider = Provider.of<PlantProvider>(
+          context,
+          listen: false,
+        );
+        provider.addPlant(currentPlant.name!, currentPlant);
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
     }
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,

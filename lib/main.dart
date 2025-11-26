@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:rainbow_color/rainbow_color.dart';
 import 'package:rootine/newplant.dart';
+import 'package:rootine/prize.dart';
 import 'package:rootine/safedatetime.dart';
 import 'package:rootine/style.dart';
 import 'package:rootine/plant.dart';
@@ -66,74 +67,71 @@ class PlantProvider extends ChangeNotifier {
             lastUpdated.year != SafeDateTime.now().year)) {
       for (var plant in extracted.values) {
         if (plant.timingOption == TimingOption.daysOfTheWeek) {
-          if (lastUpdated != null) {
-            final lastUpdatedDay =
-                lastUpdated.weekday; // 1 = Monday, 7 = Sunday
-            if (plant.weekdaySelection != null &&
-                plant.weekdaySelection![Weekday.values[lastUpdatedDay - 1]] ==
-                    true &&
-                plant.wateredToday == false) {
-              int daysMissed = 0;
-              DateTime currentDay = lastUpdated.add(const Duration(days: 1));
-              while (currentDay.isBefore(SafeDateTime.now())) {
-                final currentWeekday =
-                    currentDay.weekday; // 1 = Monday, 7 = Sunday
-                if (plant.weekdaySelection != null &&
-                    plant.weekdaySelection![Weekday.values[currentWeekday -
-                            1]] ==
-                        true) {
-                  daysMissed++;
+          final lastUpdatedDay =
+              lastUpdated.weekday; // 1 = Monday, 7 = Sunday
+          if (plant.weekdaySelection != null &&
+              plant.weekdaySelection![Weekday.values[lastUpdatedDay - 1]] ==
+                  true &&
+              plant.wateredToday == false) {
+            int daysMissed = 0;
+            DateTime currentDay = lastUpdated.add(const Duration(days: 1));
+            while (currentDay.isBefore(SafeDateTime.now())) {
+              final currentWeekday =
+                  currentDay.weekday; // 1 = Monday, 7 = Sunday
+              if (plant.weekdaySelection != null &&
+                  plant.weekdaySelection![Weekday.values[currentWeekday -
+                          1]] ==
+                      true) {
+                daysMissed++;
+              }
+              currentDay = currentDay.add(const Duration(days: 1));
+            }
+
+            plant.health -= (1 / ((daysMissed / 3) + 1));
+            print(
+              'Plant ${plant.name} missed watering for $daysMissed days.',
+            );
+          }
+          if (plant.weekdaySelection != null &&
+              plant.weekdaySelection![Weekday
+                      .values[SafeDateTime.now().weekday - 1]] ==
+                  true) {
+            plant.wateredToday = false;
+          }
+                } else if (plant.timingOption == TimingOption.numTimesPerDuration) {
+          final duration = plant.duration;
+          if (duration != null) {
+            DateTime currentDurationStart =
+                plant.startDate ?? SafeDateTime.now();
+            while (currentDurationStart.isBefore(lastUpdated)) {
+              currentDurationStart = currentDurationStart.add(
+                duration.toDuration(),
+              );
+            }
+
+            int missedIntervals = 0;
+            DateTime currentCheck = currentDurationStart;
+            while (currentCheck.isBefore(SafeDateTime.now())) {
+              missedIntervals++;
+              currentCheck = currentCheck.add(duration.toDuration());
+            }
+
+            double pointsLost = missedIntervals.toDouble();
+            if (plant.numTimes != 0 &&
+                plant.numCompletedPerDuration != null) {
+              pointsLost +=
+                  (plant.numCompletedPerDuration! - plant.numTimes!) /
+                  plant.numCompletedPerDuration!;
+              plant.numTimes = 0;
+            }
+
+            print(
+              'Plant ${plant.name} lost $pointsLost points due to missed intervals.',
+            );
+            plant.health -= (1 / ((pointsLost / 3) + 1));
+          }
+          plant.numTimes = 0;
                 }
-                currentDay = currentDay.add(const Duration(days: 1));
-              }
-
-              plant.health -= (1 / ((daysMissed / 3) + 1));
-              print(
-                'Plant ${plant.name} missed watering for $daysMissed days.',
-              );
-            }
-            if (plant.weekdaySelection != null &&
-              plant.weekdaySelection![Weekday.values[SafeDateTime.now().weekday - 1]] ==
-                true) {
-              plant.wateredToday = false;
-            }
-          }
-        } else if (plant.timingOption == TimingOption.numTimesPerDuration) {
-          if (lastUpdated != null) {
-            final duration = plant.duration;
-            if (duration != null) {
-              DateTime currentDurationStart =
-                  plant.startDate ?? SafeDateTime.now();
-              while (currentDurationStart.isBefore(lastUpdated)) {
-                currentDurationStart = currentDurationStart.add(
-                  duration.toDuration(),
-                );
-              }
-
-              int missedIntervals = 0;
-              DateTime currentCheck = currentDurationStart;
-              while (currentCheck.isBefore(SafeDateTime.now())) {
-                missedIntervals++;
-                currentCheck = currentCheck.add(duration.toDuration());
-              }
-
-              double pointsLost = missedIntervals.toDouble();
-              if (plant.numTimes != 0 &&
-                  plant.numCompletedPerDuration != null) {
-                pointsLost +=
-                    (plant.numCompletedPerDuration! - plant.numTimes!) /
-                    plant.numCompletedPerDuration!;
-                plant.numTimes = 0;
-              }
-
-              print(
-                'Plant ${plant.name} lost $pointsLost points due to missed intervals.',
-              );
-              plant.health -= (1 / ((pointsLost / 3) + 1));
-            }
-            plant.numTimes = 0;
-          }
-        }
       }
     }
 
@@ -171,7 +169,7 @@ class PlantProvider extends ChangeNotifier {
           'wateredToday': value.wateredToday,
           'numCompletedPerDuration': value.numCompletedPerDuration,
           'health': value.health,
-          'rewardType': value.rewardType.toString(),
+          'rewardType': value.rewardType?.name
         }),
       ),
     );
@@ -252,6 +250,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       entry,
                     ) {
                       Widget leadingNode = SizedBox(
+                        width: 80.0,
+                        height: 80.0,
                         child: CircularPercentIndicator(
                           radius: 40.0,
                           lineWidth: 5.0,
@@ -263,8 +263,6 @@ class _MyHomePageState extends State<MyHomePage> {
                           ),
                           progressColor: fromHealth(entry.value.health),
                         ),
-                        width: 80.0,
-                        height: 80.0
                       );
                       String wateredMsg = "";
                       bool needsWater = entry.value.needsWater();
@@ -301,31 +299,29 @@ class _MyHomePageState extends State<MyHomePage> {
                       Widget timingIndicator;
                       if (entry.value.timingOption ==
                           TimingOption.daysOfTheWeek) {
-                        timingIndicator = Row(
-                          mainAxisAlignment: MainAxisAlignment.start,
+                        timingIndicator = Wrap(
+                          spacing: 8.0,
+                          runSpacing: 4.0,
                           children: Weekday.values.map((weekday) {
-                            bool isSelected =
-                                entry.value.weekdaySelection?[weekday] ?? false;
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                              child: CircleAvatar(
-                                radius: 12,
-                                backgroundColor: isSelected
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Colors.grey[300],
-                                child: Text(
-                                  weekday.name.substring(0, 1).toUpperCase(),
-                                  style: TextStyle(
-                                    fontWeight: isSelected
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                    color: isSelected
-                                        ? Colors.white
-                                        : Colors.black,
-                                  ),
-                                ),
-                              ),
-                            );
+                          bool isSelected =
+                            entry.value.weekdaySelection?[weekday] ?? false;
+                          return CircleAvatar(
+                            radius: 12,
+                            backgroundColor: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey[300],
+                            child: Text(
+                            weekday.name.substring(0, 1).toUpperCase(),
+                            style: TextStyle(
+                              fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                              color: isSelected
+                                ? Colors.white
+                                : Colors.black,
+                            ),
+                            ),
+                          );
                           }).toList(),
                         );
                       } else {
@@ -353,139 +349,146 @@ class _MyHomePageState extends State<MyHomePage> {
                         );
                         leadingNode = const Icon(Icons.upload_file, size: 60);
                       }
-                      return  Card(
-                          elevation: 4.0,
-                          margin: const EdgeInsets.symmetric(
+                      if (entry.value.ready()) {
+                        leadingNode = Icon(
+                          Icons.card_giftcard,
+                          size: 60,
+                          color: Theme.of(context).colorScheme.primary,
+                        );
+                      }
+                      return Card(
+                        elevation: 4.0,
+                        margin: const EdgeInsets.symmetric(
                           vertical: 8.0,
                           horizontal: 16.0,
-                          ),
-                          shape: RoundedRectangleBorder(
+                        ),
+                        shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12.0),
-                          ),
-                          child: InkWell(
+                        ),
+                        child: InkWell(
                           onTap: () {
                             // Add your onTap functionality here
                             if (needsPrize) {
-                            FilePicker.platform
-                              .pickFiles(
-                                type: FileType.custom,
-                                allowedExtensions: ['rootine'],
-                              )
-                              .then((result) {
-                                if (result != null &&
-                                  result.files.isNotEmpty) {
-                                final file = result.files.first;
-                                final filePath = file.path;
-                                if (filePath != null) {
-                                  // Process the .rootine file
-                                  print('Selected file: $filePath');
+                              FilePicker.platform
+                                  .pickFiles(
+                                    type: FileType.custom,
+                                    allowedExtensions: ['rootine'],
+                                  )
+                                  .then((result) {
+                                    if (result != null &&
+                                        result.files.isNotEmpty) {
+                                      final file = result.files.first;
+                                      final filePath = file.path;
+                                      if (filePath != null) {
+                                        // Process the .rootine file
+                                        print('Selected file: $filePath');
 
-                                  entry.value.extractRootineFile(
-                                  File(file.path!),
-                                  );
-                                  entry.value
-                                    .extractRootineFile(
-                                    File(file.path!),
-                                    )
-                                    .then((_) {
-                                    setState(() {
-                                      Provider.of<PlantProvider>(
-                                      context,
-                                      listen: false,
-                                      ).updateStorage().then((_) {
-                                      Provider.of<PlantProvider>(
-                                        context,
-                                        listen: false,
-                                      ).refreshPlants();
-                                      });
-                                    });
-                                    })
-                                    .catchError((error) {
-                                    print(
-                                      'Error processing file: $error',
-                                    );
-                                    });
-                                }
-                                } else {
-                                print('No file selected.');
-                                }
-                              })
-                              .catchError((error) {
-                                print('Error picking file: $error');
-                              });
+                                        entry.value
+                                            .extractRootineFile(
+                                              File(file.path!),
+                                            )
+                                            .then((_) {
+                                              setState(() {
+                                                Provider.of<PlantProvider>(
+                                                  context,
+                                                  listen: false,
+                                                ).updateStorage().then((_) {
+                                                  Provider.of<PlantProvider>(
+                                                    context,
+                                                    listen: false,
+                                                  ).refreshPlants();
+                                                });
+                                              });
+                                            })
+                                            .catchError((error) {
+                                              print(
+                                                'Error processing file: $error',
+                                              );
+                                            });
+                                      }
+                                    } else {
+                                      print('No file selected.');
+                                    }
+                                  })
+                                  .catchError((error) {
+                                    print('Error picking file: $error');
+                                  });
+                            } else if (entry.value.ready()) {
+                              Navigator.of(context).push(
+                                      buildPrizeRoute(context, entry.value),
+                                );
                             } else {
-                            // TODO: watering
-                            bool success = entry.value.waterPlant();
-                            if (success) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                '${entry.value.name} watered!',
-                                ),
-                              ),
-                              );
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                '${entry.value.name} has already been fully watered today!',
-                                ),
-                              ),
-                              );
-                            }
-                            Provider.of<PlantProvider>(
-                              context,
-                              listen: false,
-                            ).updateStorage();
-                            setState(() {
+                              bool success = entry.value.waterPlant();
+                              if (success) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      '${entry.value.name} watered!',
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      '${entry.value.name} has already been fully watered today!',
+                                    ),
+                                  ),
+                                );
+                              }
                               Provider.of<PlantProvider>(
-                              context,
-                              listen: false,
-                              ).refreshPlants();
-                            });
+                                context,
+                                listen: false,
+                              ).updateStorage();
+                              setState(() {
+                                Provider.of<PlantProvider>(
+                                  context,
+                                  listen: false,
+                                ).refreshPlants();
+                              });
                             }
                           },
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
                             child: Row(
-                            children: [
-                              leadingNode,
-                              const SizedBox(width: 16.0),
-                              Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                                children: [
-                                Text(
-                                  entry.value.name!,
-                                  style: const TextStyle(
-                                  fontSize: 18.0,
-                                  fontWeight: FontWeight.bold,
+                              children: [
+                                leadingNode,
+                                const SizedBox(width: 16.0),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        entry.value.name!,
+                                        style: const TextStyle(
+                                          fontSize: 18.0,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4.0),
+                                      //Text(entry.value.desc!),
+                                      const SizedBox(height: 4.0),
+                                      Text(
+                                        'Health: ${(entry.value.health * 100).toStringAsFixed(0)}%',
+                                        style: TextStyle(
+                                          color: fromHealth(entry.value.health),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4.0),
+                                      Text(wateredMsg),
+                                      const SizedBox(height: 4.0),
+                                      timingIndicator,
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(height: 4.0),
-                                Text(entry.value.desc!),
-                                const SizedBox(height: 4.0),
-                                Text(
-                                  'Health: ${(entry.value.health * 100).toStringAsFixed(0)}%',
-                                  style: TextStyle(
-                                  color: fromHealth(entry.value.health),
-                                  ),
-                                ),
-                                const SizedBox(height: 4.0),
-                                Text(wateredMsg),
-                                const SizedBox(height: 4.0),
-                                timingIndicator,
-                                ],
-                              ),
-                              ),
-                              trailingNote,
-                            ],
+                                trailingNote,
+                              ],
                             ),
                           ),
-                          ),
+                        ),
                       );
-                    }).toList()
+                    }).toList(),
                   ),
                 );
               }
