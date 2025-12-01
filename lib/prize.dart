@@ -6,8 +6,8 @@ Route buildPrizeRoute(BuildContext context, Plant plant) {
   return MaterialPageRoute(
     builder: (context) => Scaffold(
       appBar: AppBar(
-        title: Text(plant.name ?? 'Plant Details'),
-        backgroundColor: Theme.of(context).primaryColor, // Match app theme
+        title: Text('You won a prize!'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary, // Match app theme
       ),
       body: SingleChildScrollView( // Make content scrollable
         child: Center(

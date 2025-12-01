@@ -67,8 +67,7 @@ class PlantProvider extends ChangeNotifier {
             lastUpdated.year != SafeDateTime.now().year)) {
       for (var plant in extracted.values) {
         if (plant.timingOption == TimingOption.daysOfTheWeek) {
-          final lastUpdatedDay =
-              lastUpdated.weekday; // 1 = Monday, 7 = Sunday
+          final lastUpdatedDay = lastUpdated.weekday; // 1 = Monday, 7 = Sunday
           if (plant.weekdaySelection != null &&
               plant.weekdaySelection![Weekday.values[lastUpdatedDay - 1]] ==
                   true &&
@@ -79,8 +78,7 @@ class PlantProvider extends ChangeNotifier {
               final currentWeekday =
                   currentDay.weekday; // 1 = Monday, 7 = Sunday
               if (plant.weekdaySelection != null &&
-                  plant.weekdaySelection![Weekday.values[currentWeekday -
-                          1]] ==
+                  plant.weekdaySelection![Weekday.values[currentWeekday - 1]] ==
                       true) {
                 daysMissed++;
               }
@@ -88,9 +86,7 @@ class PlantProvider extends ChangeNotifier {
             }
 
             plant.health -= (1 / ((daysMissed / 3) + 1));
-            print(
-              'Plant ${plant.name} missed watering for $daysMissed days.',
-            );
+            print('Plant ${plant.name} missed watering for $daysMissed days.');
           }
           if (plant.weekdaySelection != null &&
               plant.weekdaySelection![Weekday
@@ -98,42 +94,27 @@ class PlantProvider extends ChangeNotifier {
                   true) {
             plant.wateredToday = false;
           }
-                } else if (plant.timingOption == TimingOption.numTimesPerDuration) {
-          final duration = plant.duration;
-          if (duration != null) {
-            DateTime currentDurationStart =
-                plant.startDate ?? SafeDateTime.now();
-            while (currentDurationStart.isBefore(lastUpdated)) {
-              currentDurationStart = currentDurationStart.add(
-                duration.toDuration(),
-              );
-            }
-
-            int missedIntervals = 0;
-            DateTime currentCheck = currentDurationStart;
-            while (currentCheck.isBefore(SafeDateTime.now())) {
-              missedIntervals++;
-              currentCheck = currentCheck.add(duration.toDuration());
-            }
-
-            double pointsLost = missedIntervals.toDouble();
-            if (plant.numTimes != 0 &&
-                plant.numCompletedPerDuration != null) {
-              pointsLost +=
-                  (plant.numCompletedPerDuration! - plant.numTimes!) /
-                  plant.numCompletedPerDuration!;
-              plant.numTimes = 0;
-            }
-
+        } else if (plant.timingOption == TimingOption.numTimesPerDuration && plant.numTimes! < plant.numCompletedPerDuration!) {
+          final chunkLength = plant.duration!;
+          DateTime start = lastUpdated;
+          DateTime end = SafeDateTime.now();
+          Duration difference = end.difference(start);
+          int numFullChunks = (difference.inDays / chunkLength.numDays).floor();
+          double numPoints = 0;
+          if (numFullChunks > 1) {
+            numPoints += (numFullChunks - 1) * plant.numTimes!;
+          } 
+          numPoints += plant.numCompletedPerDuration! - plant.numTimes!;
+          numPoints /= plant.numCompletedPerDuration!;
+          
             print(
-              'Plant ${plant.name} lost $pointsLost points due to missed intervals.',
+              'Plant ${plant.name} lost $numPoints points due to missed intervals.',
             );
-            plant.health -= (1 / ((pointsLost / 3) + 1));
+            plant.health = (plant.health / ((numPoints/3) + 1));
           }
           plant.numTimes = 0;
-                }
+        }
       }
-    }
 
     await prefs.setString('lastUpdated', SafeDateTime.now().toIso8601String());
 
@@ -169,7 +150,7 @@ class PlantProvider extends ChangeNotifier {
           'wateredToday': value.wateredToday,
           'numCompletedPerDuration': value.numCompletedPerDuration,
           'health': value.health,
-          'rewardType': value.rewardType?.name
+          'rewardType': value.rewardType?.name,
         }),
       ),
     );
@@ -243,254 +224,262 @@ class _MyHomePageState extends State<MyHomePage> {
               } else if (snapshot.hasError) {
                 return Text('Error: ${snapshot.error}');
               } else {
-                return SingleChildScrollView(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: Provider.of<PlantProvider>(context).plants.entries.map((
-                      entry,
-                    ) {
-                      Widget leadingNode = SizedBox(
-                        width: 80.0,
-                        height: 80.0,
-                        child: CircularPercentIndicator(
-                          radius: 40.0,
-                          lineWidth: 5.0,
-                          percent: entry.value.getProgress(),
-                          center: Image.asset(
-                            entry.value.getPlantImagePath(),
-                            width: 40.0,
-                            height: 40.0,
+                var entries = Provider.of<PlantProvider>(
+                  context,
+                ).plants.entries;
+                if (entries.isEmpty) {
+                  return Text('Your garden is empty right now.');
+                } else {
+                  return SingleChildScrollView(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: entries.map((entry) {
+                        Widget leadingNode = SizedBox(
+                          width: 80.0,
+                          height: 80.0,
+                          child: CircularPercentIndicator(
+                            radius: 40.0,
+                            lineWidth: 5.0,
+                            percent: entry.value.getProgress(),
+                            center: Image.asset(
+                              entry.value.getPlantImagePath(),
+                              width: 40.0,
+                              height: 40.0,
+                            ),
+                            progressColor: fromHealth(entry.value.health),
                           ),
-                          progressColor: fromHealth(entry.value.health),
-                        ),
-                      );
-                      String wateredMsg = "";
-                      bool needsWater = entry.value.needsWater();
-                      if ((entry.value.timingOption ==
-                                  TimingOption.daysOfTheWeek ||
-                              entry.value.numCompletedPerDuration == 1) &&
-                          needsWater) {
-                        wateredMsg = "Needs to be watered today";
-                      } else {
-                        if (needsWater) {
-                          wateredMsg =
-                              "Water status: ${entry.value.numTimes}/${entry.value.numCompletedPerDuration} ";
-                          switch (entry.value.duration) {
-                            case DurationType.day:
-                              wateredMsg += " today";
-                              break;
-                            case DurationType.week:
-                              wateredMsg += " this week";
-                              break;
-                            case DurationType.month:
-                              wateredMsg += " this month";
-                              break;
-                            default:
-                              break;
+                        );
+                        String wateredMsg = "";
+                        bool needsWater = entry.value.needsWater();
+                        if ((entry.value.timingOption ==
+                                    TimingOption.daysOfTheWeek ||
+                                entry.value.numCompletedPerDuration == 1) &&
+                            needsWater) {
+                          wateredMsg = "Needs to be watered today";
+                        } else {
+                          if (needsWater) {
+                            wateredMsg =
+                                "Water status: ${entry.value.numTimes}/${entry.value.numCompletedPerDuration} ";
+                            switch (entry.value.duration) {
+                              case DurationType.day:
+                                wateredMsg += " today";
+                                break;
+                              case DurationType.week:
+                                wateredMsg += " this week";
+                                break;
+                              case DurationType.month:
+                                wateredMsg += " this month";
+                                break;
+                              default:
+                                break;
+                            }
                           }
                         }
-                      }
-                      if (!needsWater) {
-                        wateredMsg = "Fully watered today!";
-                      }
-                      Widget trailingNote = Text(
-                        'Harvests ${entry.value.expiration!.month}/${entry.value.expiration!.day}/${entry.value.expiration!.year}',
-                      );
-                      Widget timingIndicator;
-                      if (entry.value.timingOption ==
-                          TimingOption.daysOfTheWeek) {
-                        timingIndicator = Wrap(
-                          spacing: 8.0,
-                          runSpacing: 4.0,
-                          children: Weekday.values.map((weekday) {
-                          bool isSelected =
-                            entry.value.weekdaySelection?[weekday] ?? false;
-                          return CircleAvatar(
-                            radius: 12,
-                            backgroundColor: isSelected
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.grey[300],
-                            child: Text(
-                            weekday.name.substring(0, 1).toUpperCase(),
-                            style: TextStyle(
-                              fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                              color: isSelected
-                                ? Colors.white
-                                : Colors.black,
-                            ),
-                            ),
+                        if (!needsWater) {
+                          wateredMsg = "Fully watered today!";
+                        }
+                        Widget trailingNote = Text(
+                          'Harvests ${entry.value.expiration!.month}/${entry.value.expiration!.day}/${entry.value.expiration!.year}',
+                        );
+                        Widget timingIndicator;
+                        if (entry.value.timingOption ==
+                            TimingOption.daysOfTheWeek) {
+                          timingIndicator = Wrap(
+                            spacing: 8.0,
+                            runSpacing: 4.0,
+                            children: Weekday.values.map((weekday) {
+                              bool isSelected =
+                                  entry.value.weekdaySelection?[weekday] ??
+                                  false;
+                              return CircleAvatar(
+                                radius: 12,
+                                backgroundColor: isSelected
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.grey[300],
+                                child: Text(
+                                  weekday.name.substring(0, 1).toUpperCase(),
+                                  style: TextStyle(
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.black,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
                           );
-                          }).toList(),
-                        );
-                      } else {
-                        timingIndicator = Text(
-                          "Needs water ${entry.value.numCompletedPerDuration} times per ${entry.value.duration?.prettyName.toLowerCase() ?? 'duration'}",
-                        );
-                      }
-                      bool needsPrize = false;
-                      if (entry.value.prizeDescription == null ||
-                          entry.value.prizeDescription!.isEmpty) {
-                        needsPrize = true;
-                        trailingNote = Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            trailingNote,
-                            TextButton.icon(
-                              onPressed: () {
-                                // Add your "add prize" functionality here
-                                entry.value.shareLink();
-                              },
-                              icon: const Icon(Icons.card_giftcard, size: 16),
-                              label: const Text('Send a link to hide prize'),
-                            ),
-                          ],
-                        );
-                        leadingNode = const Icon(Icons.upload_file, size: 60);
-                      }
-                      if (entry.value.ready()) {
-                        leadingNode = Icon(
-                          Icons.card_giftcard,
-                          size: 60,
-                          color: Theme.of(context).colorScheme.primary,
-                        );
-                      }
-                      return Card(
-                        elevation: 4.0,
-                        margin: const EdgeInsets.symmetric(
-                          vertical: 8.0,
-                          horizontal: 16.0,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.0),
-                        ),
-                        child: InkWell(
-                          onTap: () {
-                            // Add your onTap functionality here
-                            if (needsPrize) {
-                              FilePicker.platform
-                                  .pickFiles(
-                                    type: FileType.custom,
-                                    allowedExtensions: ['rootine'],
-                                  )
-                                  .then((result) {
-                                    if (result != null &&
-                                        result.files.isNotEmpty) {
-                                      final file = result.files.first;
-                                      final filePath = file.path;
-                                      if (filePath != null) {
-                                        // Process the .rootine file
-                                        print('Selected file: $filePath');
+                        } else {
+                          timingIndicator = Text(
+                            "Needs water ${entry.value.numCompletedPerDuration} times per ${entry.value.duration?.prettyName.toLowerCase() ?? 'duration'}",
+                          );
+                        }
+                        bool needsPrize = false;
+                        if (entry.value.prizeDescription == null ||
+                            entry.value.prizeDescription!.isEmpty) {
+                          needsPrize = true;
+                          trailingNote = Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              trailingNote,
+                              TextButton.icon(
+                                onPressed: () {
+                                  // Add your "add prize" functionality here
+                                  entry.value.shareLink();
+                                },
+                                icon: const Icon(Icons.card_giftcard, size: 16),
+                                label: const Text('Send a link to hide prize'),
+                              ),
+                            ],
+                          );
+                          leadingNode = const Icon(Icons.upload_file, size: 60);
+                        }
+                        if (entry.value.ready()) {
+                          leadingNode = Icon(
+                            Icons.card_giftcard,
+                            size: 60,
+                            color: Theme.of(context).colorScheme.primary,
+                          );
+                        }
+                        return Card(
+                          elevation: 4.0,
+                          margin: const EdgeInsets.symmetric(
+                            vertical: 8.0,
+                            horizontal: 16.0,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12.0),
+                          ),
+                          child: InkWell(
+                            onTap: () {
+                              // Add your onTap functionality here
+                              if (needsPrize) {
+                                FilePicker.platform
+                                    .pickFiles(
+                                      type: FileType.custom,
+                                      allowedExtensions: ['rootine'],
+                                    )
+                                    .then((result) {
+                                      if (result != null &&
+                                          result.files.isNotEmpty) {
+                                        final file = result.files.first;
+                                        final filePath = file.path;
+                                        if (filePath != null) {
+                                          // Process the .rootine file
+                                          print('Selected file: $filePath');
 
-                                        entry.value
-                                            .extractRootineFile(
-                                              File(file.path!),
-                                            )
-                                            .then((_) {
-                                              setState(() {
-                                                Provider.of<PlantProvider>(
-                                                  context,
-                                                  listen: false,
-                                                ).updateStorage().then((_) {
+                                          entry.value
+                                              .extractRootineFile(
+                                                File(file.path!),
+                                              )
+                                              .then((_) {
+                                                setState(() {
                                                   Provider.of<PlantProvider>(
                                                     context,
                                                     listen: false,
-                                                  ).refreshPlants();
+                                                  ).updateStorage().then((_) {
+                                                    Provider.of<PlantProvider>(
+                                                      context,
+                                                      listen: false,
+                                                    ).refreshPlants();
+                                                  });
                                                 });
+                                              })
+                                              .catchError((error) {
+                                                print(
+                                                  'Error processing file: $error',
+                                                );
                                               });
-                                            })
-                                            .catchError((error) {
-                                              print(
-                                                'Error processing file: $error',
-                                              );
-                                            });
+                                        }
+                                      } else {
+                                        print('No file selected.');
                                       }
-                                    } else {
-                                      print('No file selected.');
-                                    }
-                                  })
-                                  .catchError((error) {
-                                    print('Error picking file: $error');
-                                  });
-                            } else if (entry.value.ready()) {
-                              Navigator.of(context).push(
-                                      buildPrizeRoute(context, entry.value),
-                                );
-                            } else {
-                              bool success = entry.value.waterPlant();
-                              if (success) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '${entry.value.name} watered!',
-                                    ),
-                                  ),
-                                );
+                                    })
+                                    .catchError((error) {
+                                      print('Error picking file: $error');
+                                    });
+                              } else if (entry.value.ready()) {
+                                Navigator.of(
+                                  context,
+                                ).push(buildPrizeRoute(context, entry.value));
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '${entry.value.name} has already been fully watered today!',
+                                bool success = entry.value.waterPlant();
+                                if (success) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '${entry.value.name} watered!',
+                                      ),
                                     ),
-                                  ),
-                                );
-                              }
-                              Provider.of<PlantProvider>(
-                                context,
-                                listen: false,
-                              ).updateStorage();
-                              setState(() {
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '${entry.value.name} has already been fully watered today!',
+                                      ),
+                                    ),
+                                  );
+                                }
                                 Provider.of<PlantProvider>(
                                   context,
                                   listen: false,
-                                ).refreshPlants();
-                              });
-                            }
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Row(
-                              children: [
-                                leadingNode,
-                                const SizedBox(width: 16.0),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        entry.value.name!,
-                                        style: const TextStyle(
-                                          fontSize: 18.0,
-                                          fontWeight: FontWeight.bold,
+                                ).updateStorage();
+                                setState(() {
+                                  Provider.of<PlantProvider>(
+                                    context,
+                                    listen: false,
+                                  ).refreshPlants();
+                                });
+                              }
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Row(
+                                children: [
+                                  leadingNode,
+                                  const SizedBox(width: 16.0),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          entry.value.name!,
+                                          style: const TextStyle(
+                                            fontSize: 18.0,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 4.0),
-                                      //Text(entry.value.desc!),
-                                      const SizedBox(height: 4.0),
-                                      Text(
-                                        'Health: ${(entry.value.health * 100).toStringAsFixed(0)}%',
-                                        style: TextStyle(
-                                          color: fromHealth(entry.value.health),
+                                        const SizedBox(height: 4.0),
+                                        //Text(entry.value.desc!),
+                                        const SizedBox(height: 4.0),
+                                        Text(
+                                          'Health: ${(entry.value.health * 100).toStringAsFixed(0)}%',
+                                          style: TextStyle(
+                                            color: fromHealth(
+                                              entry.value.health,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 4.0),
-                                      Text(wateredMsg),
-                                      const SizedBox(height: 4.0),
-                                      timingIndicator,
-                                    ],
+                                        const SizedBox(height: 4.0),
+                                        Text(wateredMsg),
+                                        const SizedBox(height: 4.0),
+                                        timingIndicator,
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                trailingNote,
-                              ],
+                                  trailingNote,
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                );
+                        );
+                      }).toList(),
+                    ),
+                  );
+                }
               }
             },
           ),
