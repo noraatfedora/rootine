@@ -2,19 +2,24 @@ import 'dart:collection';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:rootine/main.dart';
 import 'package:rootine/plant.dart';
+import 'package:rootine/safedatetime.dart';
 import 'package:rootine/style.dart';
 import "package:change_case/change_case.dart";
+import 'package:provider/provider.dart';
 
 double formSpacing = 10;
 
 Plant currentPlant = Plant();
-DateTime selectedDate = DateTime.now();
+DateTime selectedDate = SafeDateTime.now();
 String selectedPlantKind = getPrettyPlantNames().first;
 int _numberPickerTimes = 1;
 DurationType _selectedDuration = DurationType.day;
 
 class NewPlantRoute extends StatefulWidget {
+  const NewPlantRoute({super.key});
+
   @override
   State<StatefulWidget> createState() => _NewPlantState();
 }
@@ -24,7 +29,7 @@ class _NewPlantState extends State<NewPlantRoute> {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
+    final plantProvider = Provider.of<PlantProvider>(context, listen: false);
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -68,6 +73,7 @@ class NewPlantFormState extends State<NewPlantForm> {
                 if (value == null || value.isEmpty) {
                   return "Enter a habit!";
                 }
+                return null;
               },
             ),
             Padding(
@@ -210,13 +216,13 @@ class HarvestDatePickerState extends State {
   Future<void> _selectDate() async {
     final DateTime? pickedDate = await showDatePicker(
       context: context,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(Duration(days: 100 * 365)),
+      firstDate: SafeDateTime.now(),
+      lastDate: SafeDateTime.now().add(Duration(days: 100 * 365)),
     );
 
     setState(() {
       if (pickedDate == null) {
-        selectedDate = DateTime.now();
+        selectedDate = SafeDateTime.now();
       } else {
         selectedDate = pickedDate;
       }
@@ -241,6 +247,8 @@ final Map<Weekday, bool> _selectedDays = {
 };
 
 class TimeSelectionRoute extends StatefulWidget {
+  const TimeSelectionRoute({super.key});
+
   @override
   State<StatefulWidget> createState() => _TimeSelectionState();
 }
@@ -284,7 +292,7 @@ class _TimeSelectionState extends State<TimeSelectionRoute> {
                               ),
                               child: WeekdayToggleButtons(
                                 callback: () {
-                                  this.setTimingOption(
+                                  setTimingOption(
                                     TimingOption.daysOfTheWeek,
                                   );
                                 },
@@ -300,6 +308,9 @@ class _TimeSelectionState extends State<TimeSelectionRoute> {
                     ),
                     ListTile(
                       title: TimingOptionWidget(
+                        greyed:
+                            !(_timingOption ==
+                                TimingOption.numTimesPerDuration),
                         child: TimesPerDurationSelector(
                           callback: () {
                             this.setTimingOption(
@@ -307,9 +318,6 @@ class _TimeSelectionState extends State<TimeSelectionRoute> {
                             );
                           },
                         ),
-                        greyed:
-                            !(_timingOption ==
-                                TimingOption.numTimesPerDuration),
                       ),
                       leading: Radio<TimingOption>(
                         value: TimingOption.numTimesPerDuration,
@@ -326,6 +334,7 @@ class _TimeSelectionState extends State<TimeSelectionRoute> {
                           case TimingOption.numTimesPerDuration:
                             currentPlant.numTimes = _numberPickerTimes;
                             currentPlant.duration = _selectedDuration;
+                            currentPlant.timingOption = TimingOption.numTimesPerDuration;
                             break;
                         }
 
@@ -359,13 +368,13 @@ class _TimeSelectionState extends State<TimeSelectionRoute> {
   void setTimingOption(TimingOption selectedOption) {
     setState(() {
       print("askldfjsdlkjf");
-      this._timingOption = selectedOption;
+      _timingOption = selectedOption;
     });
   }
 }
 
 class TimesPerDurationSelector extends StatefulWidget {
-  TimesPerDurationSelector({required this.callback, super.key});
+  const TimesPerDurationSelector({required this.callback, super.key});
 
   final Function callback;
 
@@ -527,11 +536,15 @@ class TimingOptionWidget extends StatelessWidget {
 }
 
 class SetPrizeRoute extends StatefulWidget {
+  const SetPrizeRoute({super.key});
+
   @override
   State<StatefulWidget> createState() => _SetPrizeRouteState();
 }
 
 class _SetPrizeRouteState extends State<SetPrizeRoute> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final prizeController = TextEditingController();
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -539,65 +552,66 @@ class _SetPrizeRouteState extends State<SetPrizeRoute> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text("Prize"),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Describe your prize:",
-                ),
-                SizedBox(height: 10),
-                TextFormField(
-                  maxLines: 5,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(),
-                    hintText: "Enter a detailed description of your prize...",
+      body: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Describe your prize:"),
+                  SizedBox(height: 10),
+                  TextFormField(
+                    controller: prizeController,
+                    maxLines: 5,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: "Enter a detailed description of your prize...",
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return "Please provide a description!";
+                      }
+                      return null;
+                    },
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Please provide a description!";
-                    }
-                    return null;
-                  },
-                  onSaved: (value) {
-                    // Save the prize description to the currentPlant or another variable
-                    currentPlant.prizeDescription = value;
-                  },
-                ),
-                SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () {
-                    // Validate and save the form
-                    final form = Form.of(context);
-                    if (form != null && form.validate()) {
-                      form.save();
-                      /*
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (context) =>
-                              AnotherRoute(), // Replace with the next route
-                        ),
-                      );
-                      */
-                    }
-                  },
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text("Submit"),
-                      SizedBox.square(dimension: 4),
-                      Icon(Icons.check),
-                    ],
+                  SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () {
+                      // Validate and save the form
+                      if (_formKey.currentState!.validate()) {
+                        currentPlant.prizeDescription = prizeController.text;
+                        currentPlant.startDate = SafeDateTime.now();
+                        // populate default unwatered values
+                        switch(currentPlant.timingOption!) {
+                          case TimingOption.daysOfTheWeek:
+                            currentPlant.wateredToday = false;
+                            break;
+                          case TimingOption.numTimesPerDuration:
+                            currentPlant.numCompletedPerDuration=  0;
+                          break;
+                        }
+                        PlantProvider provider = Provider.of<PlantProvider>(context, listen:false);
+                        provider.addPlant(currentPlant.name!, currentPlant);
+                        Navigator.of(context).popUntil((route) => route.isFirst);
+                      } 
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text("Submit"),
+                        SizedBox.square(dimension: 4),
+                        Icon(Icons.check),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -1,53 +1,199 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:percent_indicator/percent_indicator.dart';
+import 'package:rainbow_color/rainbow_color.dart';
 import 'package:rootine/newplant.dart';
+import 'package:rootine/safedatetime.dart';
 import 'package:rootine/style.dart';
+import 'package:rootine/plant.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => PlantProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
-class MyApp extends StatelessWidget {
+class PlantProvider extends ChangeNotifier {
+  final Map<String, Plant> _plants = {};
+
+  Map<String, Plant> get plants => _plants;
+
+  void addPlant(String id, Plant plant) {
+    _plants[id] = plant;
+    updateStorage();
+    notifyListeners(); // Notify listeners about the change
+  }
+
+  void removePlant(String id) {
+    _plants.remove(id);
+    updateStorage();
+    notifyListeners(); // Notify listeners about the change
+  }
+
+  Future<Map<String, Plant>> getPlants() async {
+    final prefs = await SharedPreferences.getInstance();
+    final plantsJson = prefs.getString('plants');
+    final lastUpdatedString = prefs.getString('lastUpdated');
+    DateTime? lastUpdated;
+    if (lastUpdatedString != null) {
+      lastUpdated = DateTime.tryParse(lastUpdatedString);
+    }
+
+    if (plantsJson == null) {
+      return {};
+    }
+
+    final Map<String, dynamic> plantsMap = Map<String, dynamic>.from(
+      jsonDecode(plantsJson),
+    );
+
+    Map<String, Plant> extracted = plantsMap.map(
+      (key, value) =>
+          MapEntry(key, Plant.fromMap(Map<String, dynamic>.from(value))),
+    );
+
+    if (lastUpdated != null && (
+        lastUpdated.day != SafeDateTime.now().day ||
+        lastUpdated.month != SafeDateTime.now().month ||
+        lastUpdated.year != SafeDateTime.now().year)) {
+      for (var plant in extracted.values) {
+        if (plant.timingOption == TimingOption.daysOfTheWeek) {
+          if (lastUpdated != null) {
+            final lastUpdatedDay =
+                lastUpdated.weekday; // 1 = Monday, 7 = Sunday
+            if (plant.weekdaySelection != null &&
+                plant.weekdaySelection![Weekday.values[lastUpdatedDay - 1]] ==
+                    true &&
+                plant.wateredToday == false) {
+              int daysMissed = 0;
+              DateTime currentDay = lastUpdated.add(const Duration(days: 1));
+              while (currentDay.isBefore(SafeDateTime.now())) {
+                final currentWeekday =
+                    currentDay.weekday; // 1 = Monday, 7 = Sunday
+                if (plant.weekdaySelection != null &&
+                    plant.weekdaySelection![Weekday.values[currentWeekday -
+                            1]] ==
+                        true) {
+                  daysMissed++;
+                }
+                currentDay = currentDay.add(const Duration(days: 1));
+              }
+
+              plant.health -= (1/((daysMissed/3)+1));
+              print(
+                'Plant ${plant.name} missed watering for $daysMissed days.',
+              );
+            }
+          }
+        } else if (plant.timingOption == TimingOption.numTimesPerDuration) {
+          if (lastUpdated != null) {
+            final duration = plant.duration;
+            if (duration != null) {
+              DateTime currentDurationStart = plant.startDate ?? SafeDateTime.now();
+              while (currentDurationStart.isBefore(lastUpdated)) {
+                currentDurationStart = currentDurationStart.add(duration.toDuration());
+              }
+
+              int missedIntervals = 0;
+              DateTime currentCheck = currentDurationStart;
+              while (currentCheck.isBefore(SafeDateTime.now())) {
+                missedIntervals++;
+                currentCheck = currentCheck.add(duration.toDuration());
+              }
+
+              double pointsLost = missedIntervals.toDouble();
+              if (plant.numTimes != 0 && plant.numCompletedPerDuration != null) {
+                pointsLost += (plant.numCompletedPerDuration! - plant.numTimes!) /
+                    plant.numCompletedPerDuration!;
+                plant.numTimes = 0;
+              }
+
+              print(
+                'Plant ${plant.name} lost $pointsLost points due to missed intervals.',
+              );
+              plant.health -= (1/((pointsLost/3)+1));
+            }
+          }
+        }
+      }
+    }
+
+    await prefs.setString('lastUpdated', SafeDateTime.now().toIso8601String());
+
+    return extracted;
+  }
+
+  Future<void> refreshPlants() async {
+    Map<String, Plant> newCopy = await getPlants();
+    _plants.clear();
+    _plants.addAll(newCopy);
+    // getting plants can cause logic that refreshes
+    // the health value
+    updateStorage();
+  }
+
+  Future<void> updateStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final plantsJson = jsonEncode(
+      _plants.map(
+        (key, value) => MapEntry(key, {
+          'name': value.name,
+          'desc': value.desc,
+          'expiration': value.expiration?.toIso8601String(),
+          'kind': value.kind?.prettyName,
+          'prizeDescription': value.prizeDescription,
+          'weekdaySelection': value.weekdaySelection?.map(
+            (key, value) => MapEntry(key.name, value),
+          ),
+          'numTimes': value.numTimes,
+          'duration': value.duration?.prettyName,
+          'timingOption': value.timingOption?.name,
+          'startDate': value.startDate?.toIso8601String(),
+          'wateredToday': value.wateredToday,
+          'numCompletedPerDuration': value.numCompletedPerDuration,
+          'health': value.health
+        }),
+      ),
+    );
+    await prefs.setString('plants', plantsJson);
+  }
+}
+
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  final PlantProvider _plantProvider = PlantProvider();
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Rootine',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Color.fromARGB(255, 31, 74, 22)),
+    return ChangeNotifierProvider.value(
+      value: _plantProvider,
+      child: MaterialApp(
+        title: 'Rootine',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color.fromARGB(255, 31, 74, 22),
+          ),
+        ),
+        home: const MyHomePage(title: 'Rootine'),
       ),
-      home: const MyHomePage(title: 'Rootine'),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
 
   final String title;
 
@@ -60,54 +206,107 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _incrementCounter() {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
       _counter++;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
       body: DefaultTextStyle.merge(
         style: RootineStyle.textStyle,
         child: Center(
-          // Center is a layout widget. It takes a single child and positions it
-          // in the middle of the parent.
-        child:
-          Text('there are $_counter plants in the garden') 
-      )),
+          child: FutureBuilder(
+            future: Provider.of<PlantProvider>(
+              context,
+              listen: false,
+            ).refreshPlants(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const CircularProgressIndicator();
+              } else if (snapshot.hasError) {
+                return Text('Error: ${snapshot.error}');
+              } else {
+                return SingleChildScrollView(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: Provider.of<PlantProvider>(context).plants.entries
+                        .map((entry) {
+                            return Card(
+                              elevation: 4.0,
+                              margin: const EdgeInsets.symmetric(
+                              vertical: 8.0,
+                              horizontal: 16.0,
+                              ),
+                              shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12.0),
+                              ),
+                              child: ListTile(
+                              onTap: () {
+                                // Add your onTap functionality here
+                              },
+                              leading: CircularPercentIndicator(
+                                radius: 20.0,
+                                lineWidth: 5.0,
+                                percent: entry.value.getProgress(),
+                                center: Text(
+                                '${(entry.value.getProgress() * 100).toStringAsFixed(0)}%',
+                                style: const TextStyle(fontSize: 10),
+                                ),
+                                progressColor: fromHealth(entry.value.health),
+                              ),
+                              title: Text(entry.key),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                Text(entry.value.desc!),
+                                Text(
+                                  'Health: ${(entry.value.health * 100).toStringAsFixed(0)}%',
+                                  style: TextStyle(color: fromHealth(entry.value.health)),
+                                ),
+                                ],
+                              ),
+                              trailing: Text(
+                                'Harvests ${entry.value.expiration!.day}/${entry.value.expiration!.month}/${entry.value.expiration!.year}',
+                                style: const TextStyle(color: Colors.grey),
+                              ),
+                              ),
+                            );
+                        })
+                        .toList(),
+                  ),
+                );
+              }
+            },
+          ),
+        ),
+      ),
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
-        child: Container(height: 50.0)
+        child: Container(height: 50.0),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => Navigator.push(
           context,
-          MaterialPageRoute<void>(builder: (context) => NewPlantRoute())
-          ),
+          MaterialPageRoute<void>(builder: (context) => NewPlantRoute()),
+        ),
         tooltip: 'Make a new plant',
-        child: const Icon(Icons.add)
+        child: const Icon(Icons.add),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
+}
+
+Color fromHealth(double health) {
+  var rb = Rainbow(
+    spectrum: [Color(0xffff0000), Color.fromARGB(255, 225, 221, 0), Color.fromARGB(255, 0, 158, 0)],
+    rangeStart: 0.0,
+    rangeEnd: 1.0,
+  );
+  return rb[health];
 }
